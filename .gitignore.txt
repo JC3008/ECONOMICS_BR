@@ -1,0 +1,6 @@
+Staging_Files
+scripts_em_validação
+Raw
+Curated
+connections.py
+legado.py
