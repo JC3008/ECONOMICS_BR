@@ -13,6 +13,9 @@ import psycopg2
 import time
 import re
 from connections import *
+import boto3 
+from datetime  import datetime as dt
+import io
 
 
 def extract_html():
@@ -208,5 +211,28 @@ def update_aws():
     PG = pd.read_sql(f'select * from dw_b3 where "date" >= \'{ultimadata}\'',connPG)
     PG.to_csv('{string.folder_local_dw}/AWS_b3.csv',sep=';', index=False)
 
+time = dt.date(dt.now())
+
+
+def boto3_aws_pg():
+    s3_client = boto3.client('s3')
+    s3_client.upload_file(f"{string.folder_local_dw}/AWS_b3.csv",string.s3_bucket,f"{string.s3_folder}/fato_b3_{time}.csv",)
+
+
+def to_parquet_s3():
+    s3 = boto3.resource('s3')
+    bucket = s3.Bucket(string.s3_bucket)
+    prefix_objs = bucket.objects.filter(Prefix="raw-data/fato_b3_")
+    prefix_df = []
+    df = pd.DataFrame(columns=['fk_empresas', 'cod_listagem', 'date', 'LOADED_DATE','silver_timestamp', 'Papel', 'Cotacao', 'PL', 'PVP', 'PSR', 'DivYield',    'P_Ativo', 'P_CapitalGiro', 'P_Ebit', 'P_Ativ_Circ_Liq', 'Ev_Ebit','Ev_Ebitda', 'Mrg_Ebit', 'Mrg_Ebit.1', 'MrgLiq', 'LiqCorr', 'ROIC','ROE', 'Liq2meses', 'PatrimLiq', 'DivBrutaPatrimonio','CrescReceita5anos'])
+
+    for obj in prefix_objs:
+        key = obj.key
+        body = obj.get()['Body'].read()
+        temp = pd.read_csv(io.BytesIO(body), encoding='utf8',sep=';') 
+        df = df.append(temp,ignore_index=False)
+    df.to_parquet(string.s3_folder_parquet,engine='fastparquet',partition_cols='date')
+
+        
 
 
