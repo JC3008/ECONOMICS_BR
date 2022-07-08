@@ -90,7 +90,10 @@ def rename_and_insert_loaded_date():
 
 
 def save_csv_curated():
-
+    '''
+    Here we create surrogate_keys, fill na inserting 99999 and change data types
+    Aqui são inseridas as chaves substitutas, preenchidos os vazios com 99999 e ajustados os tipos de dados
+    '''
     query_silver = '''
 select 
 b."pk_empresas" as "fk_empresas",
@@ -162,7 +165,48 @@ left join dim_empresas b on a."Papel" = b."ticker"
 
     dados.to_csv(f'{string.folder_curated}/silver_fundamentus.csv',sep=';',index=False)
 
-save_csv_curated()
+def create_dw():
+    '''
+    This piece of code performs creating datawarehouse source and save it as csv
+    Getting the last date of silver table
+    Este código cria o arquivo fonte para o dw buscando a chave substituta da dim calendario
+    observando a última data da tabela silver
+    '''
+    conn_string = 'postgresql://postgres:postgres@127.0.0.1/teste_airflow'  
+    db = create_engine(conn_string)
+    conn = db.connect()
+    silver = pd.read_csv('/home/jc/projeto_b3_linux/2_silver/silver_fundamentus.csv',sep=';')
+    stocks = pd.read_sql('select * from dim_stocks',conn)
+    cal = pd.read_sql('select * from dim_calendario',conn)
+
+    df = silver.merge(cal, left_on='date',right_on='data', how='left').merge(stocks, left_on='Papel', right_on='ticker',how='left')
+    df = df[['fk_empresas','pk_calendario','cod_listagem_x','date','LOADED_DATE_x','silver_timestamp_x','Papel', 'Cotacao', 'PL', 'PVP', 'PSR','DivYield', 'P_Ativo', 'P_CapitalGiro','P_Ebit', 'P_Ativ_Circ_Liq', 'Ev_Ebit', 'Ev_Ebitda', 'Mrg_Ebit','MrgLiq', 'LiqCorr','ROIC', 'ROE', 'Liq2meses', 'PatrimLiq', 'DivBrutaPatrimonio','CrescReceita5anos']]
+
+    df.rename(columns={'cod_listagem_x':'cod_listagem','LOADED_DATE_x':'LOADED_DATE'},inplace=True)
+    silver['LOADED_DATE'] = silver['LOADED_DATE'].astype('datetime64[ns]')
+    try:
+        ult_dat_silver = silver['LOADED_DATE'].drop_duplicates().nlargest(2).iloc[-1]
+        ult_dat_dw = pd.read_sql('select max("LOADED_DATE") from dw_b3',conn)['max'][0]
+        silver2 = silver['LOADED_DATE'] > ult_dat_dw
+    except:
+        ult_dat_silver = '1900-01-01'
+        ult_dat_dw = '1900-01-01'
+        silver2 = silver['LOADED_DATE'] > ult_dat_dw
+    DW = silver[silver2]
+    DW.to_csv('/home/jc/projeto_b3_linux/3_gold/dw_b3.csv',sep=';', index=False)
+    
+def update_aws():
+    conn_stringPG = string.cnx_string
+    dbPG = create_engine(conn_stringPG)
+    connPG = dbPG.connect()
+    conn_string = string.cnx_stringRDS
+    db = create_engine(conn_string)
+    conn = db.connect()
+    time = dt.now()    
+    
+    ultimadata  = str(dt.date(time))
+    PG = pd.read_sql(f'select * from dw_b3 where "date" >= \'{ultimadata}\'',connPG)
+    PG.to_csv('{string.folder_local_dw}/AWS_b3.csv',sep=';', index=False)
 
 
 
