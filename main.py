@@ -198,7 +198,7 @@ def create_dw():
     DW = silver[silver2]
     DW.to_csv('/home/jc/projeto_b3_linux/3_gold/dw_b3.csv',sep=';', index=False)
     
-def update_aws():
+def get_the_last_date_from_dw():
     conn_stringPG = string.cnx_string
     dbPG = create_engine(conn_stringPG)
     connPG = dbPG.connect()
